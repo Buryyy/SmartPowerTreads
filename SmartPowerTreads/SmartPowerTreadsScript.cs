@@ -1,21 +1,20 @@
-﻿using Ensage;
+﻿using System;
+using System.ComponentModel.Composition;
+using System.Linq;
+using System.Threading.Tasks;
+using Ensage;
 using Ensage.Common.Extensions;
-using Ensage.Common.Objects.UtilityObjects;
 using Ensage.Items;
 using Ensage.SDK.Handlers;
 using Ensage.SDK.Helpers;
 using Ensage.SDK.Service;
 using Ensage.SDK.Service.Metadata;
 using SmartPowerTreads.Configuration;
-using System;
-using System.ComponentModel.Composition;
-using System.Linq;
-using System.Threading.Tasks;
-using EntityExtensions = Ensage.Common.Extensions.EntityExtensions;
+using Attribute = Ensage.Attribute;
 
 namespace SmartPowerTreads
 {
-    [ExportPlugin("Smart Power Treads", author: "nakamaa")]
+    [ExportPlugin("Smart Power Treads", author: "nakama")]
     public class SmartPowerTreads : Plugin
     {
         private readonly Hero _hero;
@@ -23,7 +22,6 @@ namespace SmartPowerTreads
 
         private readonly IServiceContext _serviceContext;
         private readonly IUpdateHandler _updateHandler;
-        private readonly Sleeper _sleeper;
         private readonly Random _random;
 
         private bool _isSwitching;
@@ -36,7 +34,6 @@ namespace SmartPowerTreads
             _updateHandler = UpdateManager.Subscribe(OnGameUpdate, 200);
             _random = new Random();
             _configs = new MenuConfiguration();
-            _sleeper = new Sleeper();
         }
 
         private PowerTreads Treads
@@ -58,7 +55,6 @@ namespace SmartPowerTreads
         protected override void OnDeactivate()
         {
             Entity.OnAnimationChanged -= OnAnimationChanged;
-
             _updateHandler.TryDeactivate();
             _configs.DisposeFactory();
         }
@@ -85,8 +81,8 @@ namespace SmartPowerTreads
 
             var boots = Treads;
 
-            if (boots == null) return;
-
+            if (boots == null || IsLowHealth) return;
+            
             if (sender.Animation.Name.Contains("attack") && boots.ActiveAttribute != _hero.PrimaryAttribute && _hero.IsAttacking() && !_isSwitching)
             {
                 await SetBootsAttributeAsync(boots, _hero.PrimaryAttribute);
@@ -97,38 +93,56 @@ namespace SmartPowerTreads
         {
             var unitsWithinRange = ObjectManager.GetEntities<Unit>().Any(
                 u => u.IsValid && u.IsAlive && u.Team != _hero.Team
-                && EntityExtensions.Distance2D(_hero, u) < _hero.GetAttackRange() + (_hero.IsMelee ? 300 : 100));
+                && _hero.Distance2D(u) < _hero.GetAttackRange() + (_hero.IsMelee ? 300 : 100));
 
-            if (unitsWithinRange) return;
-            if (_hero.Animation.Name.Contains("attack")) return;
+            if (IsLowHealth)
+            {
+                await SetBootsAttributeAsync(treads, Attribute.Strength);
+                return;
+            }
 
-            if (_hero.IsAttacking() || _hero.Target != null) return;
+            if (unitsWithinRange
+                || _hero.Animation.Name.Contains("attack")
+                || _hero.IsAttacking()
+                || _hero.Target != null) return;
+
 
             if (_configs.SwitchingDelay.Value > 0)
             {
                 await Task.Delay(_configs.SwitchingDelay.Value * 1000);
             }
-            if (IsFullManaAndHealth())
+            if (IsFullManaAndHealth)
             {
                 await SetBootsAttributeAsync(treads, _hero.PrimaryAttribute);
                 return;
             }
+
+        
             if (!_hero.Mana.Equals(_hero.MaximumMana))
             {
-                await SetBootsAttributeAsync(treads, Ensage.Attribute.Intelligence);
+                await SetBootsAttributeAsync(treads, Attribute.Intelligence);
             }
             else
             {
-                await SetBootsAttributeAsync(treads, Ensage.Attribute.Strength);
+                await SetBootsAttributeAsync(treads, Attribute.Strength);
             }
         }
+        /*
+         *
+         *     if (_hero.Health < _hero.MaximumHealth / 3 && _configs.StrengthOnLowHP.Value) //Sit on strength if hp is low.
+            {
+                await SetBootsAttributeAsync(treads, Attribute.Strength);
+                return;
+            }
+         */
+        
 
-        public bool IsFullManaAndHealth()
-        {
-            return _hero.Mana.Equals(_hero.MaximumMana) && _hero.Health.Equals(_hero.MaximumHealth);
-        }
+        public bool IsLowHealth => _hero.Health < _hero.MaximumHealth / 3 && _configs.StrengthOnLowHP.Value;
 
-        private async Task SetBootsAttributeAsync(PowerTreads boots, Ensage.Attribute targetAttribute)
+        public bool IsFullManaAndHealth => _hero.Mana.Equals(_hero.MaximumMana) && _hero.Health.Equals(_hero.MaximumHealth);
+        
+
+        private async Task SetBootsAttributeAsync(PowerTreads boots, Attribute targetAttribute)
         {
             if (boots.ActiveAttribute == targetAttribute || _isSwitching) return;
 
