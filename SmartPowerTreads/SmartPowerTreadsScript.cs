@@ -149,8 +149,8 @@ namespace SmartPowerTreads
             while (boots.ActiveAttribute != targetAttribute)
             {
                 _isSwitching = true;
-                boots.UseAbility();
-                await Task.Delay(_configs.SwitchingSpeed.Value + _random.Next(5, 50)); //Randomize this a bit..
+                boots.UseAbility(); 
+                await Task.Delay(_configs.SwitchingSpeed.Value + (_configs.RandomizeSwitches ? _random.Next(5, 50) : 0)); //Randomize this a bit..
             }
             _isSwitching = false;
         }
