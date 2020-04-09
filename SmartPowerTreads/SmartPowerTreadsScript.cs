@@ -10,7 +10,6 @@ using Ensage.SDK.Helpers;
 using Ensage.SDK.Service;
 using Ensage.SDK.Service.Metadata;
 using SmartPowerTreads.Configuration;
-using Attribute = Ensage.Attribute;
 
 namespace SmartPowerTreads
 {
@@ -18,10 +17,10 @@ namespace SmartPowerTreads
     public class SmartPowerTreads : Plugin
     {
         private readonly Hero _hero;
-        private readonly MenuConfiguration _configs;
 
-        private readonly IServiceContext _serviceContext;
+        private readonly MenuConfiguration _configs;
         private readonly IUpdateHandler _updateHandler;
+
         private readonly Random _random;
 
         private bool _isSwitching;
@@ -29,11 +28,11 @@ namespace SmartPowerTreads
         [ImportingConstructor]
         public SmartPowerTreads(IServiceContext serviceContext)
         {
-            _serviceContext = serviceContext;
             _hero = serviceContext.Owner as Hero;
             _updateHandler = UpdateManager.Subscribe(OnGameUpdate, 200);
             _random = new Random();
             _configs = new MenuConfiguration();
+
         }
 
         private PowerTreads Treads
@@ -45,6 +44,11 @@ namespace SmartPowerTreads
                 return treads == null || !treads.IsEnabled ? null : treads as PowerTreads;
             }
         }
+
+        public bool IsLowHealth => _hero.Health < _hero.MaximumHealth / 3 && _configs.StrengthOnLowHP.Value;
+
+        public bool IsFullManaAndHealth => _hero.Mana.Equals(_hero.MaximumMana) && _hero.Health.Equals(_hero.MaximumHealth);
+
 
         protected override void OnActivate()
         {
@@ -61,10 +65,8 @@ namespace SmartPowerTreads
 
         private async void OnGameUpdate()
         {
-            if (!_hero.IsAlive || Game.IsPaused)
-            {
-                return;
-            }
+            if (!_hero.IsAlive || Game.IsPaused) return;
+
             var boots = Treads;
 
             if (boots == null) return;
@@ -82,7 +84,7 @@ namespace SmartPowerTreads
             var boots = Treads;
 
             if (boots == null || IsLowHealth) return;
-            
+
             if (sender.Animation.Name.Contains("attack") && boots.ActiveAttribute != _hero.PrimaryAttribute && _hero.IsAttacking() && !_isSwitching)
             {
                 await SetBootsAttributeAsync(boots, _hero.PrimaryAttribute);
@@ -97,7 +99,7 @@ namespace SmartPowerTreads
 
             if (IsLowHealth)
             {
-                await SetBootsAttributeAsync(treads, Attribute.Strength);
+                await SetBootsAttributeAsync(treads, Ensage.Attribute.Strength);
                 return;
             }
 
@@ -117,39 +119,29 @@ namespace SmartPowerTreads
                 return;
             }
 
-        
             if (!_hero.Mana.Equals(_hero.MaximumMana))
             {
-                await SetBootsAttributeAsync(treads, Attribute.Intelligence);
+                await SetBootsAttributeAsync(treads, Ensage.Attribute.Intelligence);
             }
             else
             {
-                await SetBootsAttributeAsync(treads, Attribute.Strength);
+                await SetBootsAttributeAsync(treads, Ensage.Attribute.Strength);
             }
         }
-        /*
-         *
-         *     if (_hero.Health < _hero.MaximumHealth / 3 && _configs.StrengthOnLowHP.Value) //Sit on strength if hp is low.
-            {
-                await SetBootsAttributeAsync(treads, Attribute.Strength);
-                return;
-            }
-         */
-        
 
-        public bool IsLowHealth => _hero.Health < _hero.MaximumHealth / 3 && _configs.StrengthOnLowHP.Value;
-
-        public bool IsFullManaAndHealth => _hero.Mana.Equals(_hero.MaximumMana) && _hero.Health.Equals(_hero.MaximumHealth);
-        
-
-        private async Task SetBootsAttributeAsync(PowerTreads boots, Attribute targetAttribute)
+        private async Task SetBootsAttributeAsync(PowerTreads boots, Ensage.Attribute targetAttribute)
         {
             if (boots.ActiveAttribute == targetAttribute || _isSwitching) return;
 
             while (boots.ActiveAttribute != targetAttribute)
             {
+                if (_hero.IsInvisible() && _hero.HeroId != HeroId.npc_dota_hero_riki)
+                {
+                    _isSwitching = false;
+                    break;
+                }
                 _isSwitching = true;
-                boots.UseAbility(); 
+                boots.UseAbility();
                 await Task.Delay(_configs.SwitchingSpeed.Value + (_configs.RandomizeSwitches ? _random.Next(5, 50) : 0)); //Randomize this a bit..
             }
             _isSwitching = false;
