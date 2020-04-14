@@ -65,7 +65,7 @@ namespace SmartPowerTreads
 
         private async void OnGameUpdate()
         {
-            if (!_hero.IsAlive || Game.IsPaused) return;
+            if (!_hero.IsAlive || Game.IsPaused || !_configs.IsEnabled.Value) return;
 
             var boots = Treads;
 
@@ -79,7 +79,7 @@ namespace SmartPowerTreads
 
         private async void OnAnimationChanged(Entity sender, EventArgs args)
         {
-            if (sender.Owner != _hero.Owner) return;
+            if (sender.Owner != _hero.Owner || !_configs.IsEnabled.Value) return;
 
             var boots = Treads;
 
